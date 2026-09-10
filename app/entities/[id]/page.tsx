@@ -21,7 +21,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     };
   }
 
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://worldknows.com';
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://world-knows.vercel.app';
   const title = `${entity.name} (${entity.type}) — Knowledge Graph Entity | WorldKnows`;
   const description = entity.description || `Explore verified relationships, provenance sources, and connected topics for ${entity.name} on WorldKnows.`;
 
@@ -70,7 +70,7 @@ export default async function EntityPage({ params }: Props) {
     },
   });
 
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://worldknows.com';
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL ||  'https://world-knows.vercel.app';
   const canonicalUrl = `${baseUrl}/entities/${id}`;
 
   const jsonLd = entityData ? {
