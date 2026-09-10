@@ -8,8 +8,9 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: 'WorldKnows — Understand Anything.',
-  description: 'Search, explore, compare, and discover reliable information from across the web.',
+  title: 'WorldKnows — Understand Anything',
+  description:
+    'WorldKnows helps you search, understand, compare, verify, and explore knowledge from across the web.',
   verification: {
     google: '8_Syx2s137T93Wh-BFTcAi86SHVh2_ub2Fk9OsPugDg',
   },

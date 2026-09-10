@@ -2,7 +2,7 @@ import { MetadataRoute } from 'next';
 import { prisma } from '@/lib/prisma';
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://worldknows.com';
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://world-knows.vercel.app';
 
   // Fetch all public knowledge topics
   const topics = await prisma.topic.findMany({
