@@ -1,0 +1,227 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id               String            @id @default(uuid())
+  email            String            @unique
+  passwordHash     String
+  name             String?
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+  searches         Search[]
+  bookmarks        Bookmark[]
+  collections      Collection[]
+  researchProjects ResearchProject[]
+  conversations    AIConversation[]
+}
+
+model Search {
+  id              String           @id @default(uuid())
+  userId          String?
+  user            User?            @relation(fields: [userId], references: [id])
+  query           String
+  intent          String?
+  summary         String?
+  createdAt       DateTime         @default(now())
+  sources         Source[]
+  collectionItems CollectionItem[]
+
+  @@index([userId])
+}
+
+model Source {
+  id                  String               @id @default(uuid())
+  searchId            String
+  search              Search               @relation(fields: [searchId], references: [id], onDelete: Cascade)
+  title               String
+  url                 String
+  domain              String
+  snippet             String?
+  reliabilityScore    Float?
+  entityRelationships EntityRelationship[]
+  entitySources       EntitySource[]
+}
+
+model Bookmark {
+  id              String           @id @default(uuid())
+  userId          String
+  user            User             @relation(fields: [userId], references: [id])
+  title           String
+  url             String
+  notes           String?
+  createdAt       DateTime         @default(now())
+  collectionItems CollectionItem[]
+
+  @@index([userId])
+}
+
+model Collection {
+  id              String           @id @default(uuid())
+  userId          String
+  user            User             @relation(fields: [userId], references: [id])
+  name            String
+  description     String?
+  createdAt       DateTime         @default(now())
+  items           CollectionItem[]
+
+  @@index([userId])
+}
+
+model CollectionItem {
+  id           String     @id @default(uuid())
+  collectionId String
+  collection   Collection @relation(fields: [collectionId], references: [id], onDelete: Cascade)
+  searchId     String?
+  search       Search?    @relation(fields: [searchId], references: [id], onDelete: SetNull)
+  bookmarkId   String?
+  bookmark     Bookmark?  @relation(fields: [bookmarkId], references: [id], onDelete: SetNull)
+  createdAt    DateTime   @default(now())
+
+  // Enforce exactly one of searchId or bookmarkId (XOR)
+  // Enforced by Postgres CHECK constraint in migration
+}
+
+model ResearchProject {
+  id          String         @id @default(uuid())
+  userId      String
+  user        User           @relation(fields: [userId], references: [id])
+  title       String
+  description String?
+  createdAt   DateTime       @default(now())
+  notes       ResearchNote[]
+  topics      Topic[]        @relation("ResearchProjectTopics")
+  entities    Entity[]       @relation("ResearchProjectEntities")
+
+  @@index([userId])
+}
+
+model ResearchNote {
+  id        String          @id @default(uuid())
+  projectId String
+  project   ResearchProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  title     String
+  content   String
+  createdAt DateTime        @default(now())
+}
+
+model AIConversation {
+  id        String      @id @default(uuid())
+  userId    String
+  user      User        @relation(fields: [userId], references: [id])
+  title     String
+  createdAt DateTime    @default(now())
+  messages  AIMessage[]
+
+  @@index([userId])
+}
+
+model AIMessage {
+  id             String         @id @default(uuid())
+  conversationId String
+  conversation   AIConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  role           String // 'system', 'user', 'assistant'
+  content        String
+  createdAt      DateTime       @default(now())
+}
+
+// ==========================================
+// Phase 7: Knowledge Graph & Topics Models
+// ==========================================
+
+enum EntityType {
+  PERSON
+  ORGANIZATION
+  PLACE
+  EVENT
+  CONCEPT
+  TECHNOLOGY
+  OTHER
+}
+
+model Topic {
+  id               String              @id @default(uuid())
+  slug             String              @unique
+  name             String
+  description      String?
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
+  topicEntities    TopicEntity[]
+  topicA           TopicRelationship[] @relation("TopicARelation")
+  topicB           TopicRelationship[] @relation("TopicBRelation")
+  researchProjects ResearchProject[]   @relation("ResearchProjectTopics")
+}
+
+model Entity {
+  id                 String               @id @default(uuid())
+  name               String
+  type               EntityType
+  description        String?
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime             @updatedAt
+  topicEntities      TopicEntity[]
+  sourceRelationA    EntityRelationship[] @relation("EntityARelation")
+  sourceRelationB    EntityRelationship[] @relation("EntityBRelation")
+  entitySources      EntitySource[]
+  researchProjects   ResearchProject[]    @relation("ResearchProjectEntities")
+
+  @@unique([name, type])
+}
+
+model TopicEntity {
+  id        String   @id @default(uuid())
+  topicId   String
+  topic     Topic    @relation(fields: [topicId], references: [id], onDelete: Cascade)
+  entityId  String
+  entity    Entity   @relation(fields: [entityId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([topicId, entityId])
+}
+
+model TopicRelationship {
+  id          String   @id @default(uuid())
+  topicAId    String
+  topicA      Topic    @relation("TopicARelation", fields: [topicAId], references: [id], onDelete: Cascade)
+  topicBId    String
+  topicB      Topic    @relation("TopicBRelation", fields: [topicBId], references: [id], onDelete: Cascade)
+  type        String
+  description String?
+  createdAt   DateTime @default(now())
+
+  @@unique([topicAId, topicBId, type])
+}
+
+model EntityRelationship {
+  id          String   @id @default(uuid())
+  entityAId   String
+  entityA     Entity   @relation("EntityARelation", fields: [entityAId], references: [id], onDelete: Cascade)
+  entityBId   String
+  entityB     Entity   @relation("EntityBRelation", fields: [entityBId], references: [id], onDelete: Cascade)
+  type        String
+  description String?
+  sourceId    String?
+  source      Source?  @relation(fields: [sourceId], references: [id], onDelete: SetNull)
+  createdAt   DateTime @default(now())
+
+  @@unique([entityAId, entityBId, type])
+  @@index([sourceId])
+}
+
+model EntitySource {
+  id         String   @id @default(uuid())
+  entityId   String
+  entity     Entity   @relation(fields: [entityId], references: [id], onDelete: Cascade)
+  sourceId   String
+  source     Source   @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+  evidence   String?
+  createdAt  DateTime @default(now())
+
+  @@unique([entityId, sourceId])
+  @@index([sourceId])
+}
