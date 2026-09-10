@@ -98,10 +98,11 @@ export async function GET(request: Request, context: RouteContext) {
     }
 
     // Format associated topics
-    const topics = entity.topicEntities.map((te) => te.topic);
+    const topics = entity.topicEntities.map((te: typeof entity.topicEntities[number]) => te.topic);
 
     // Format relationships in both directions
-    const outgoingRelationships = entity.sourceRelationA.map((rel) => ({
+    const outgoingRelationships = entity.sourceRelationA.map(
+  (rel: typeof entity.sourceRelationA[number]) => ({
       id: rel.id,
       type: rel.type,
       description: rel.description,
@@ -111,28 +112,32 @@ export async function GET(request: Request, context: RouteContext) {
       createdAt: rel.createdAt,
     }));
 
-    const incomingRelationships = entity.sourceRelationB.map((rel) => ({
-      id: rel.id,
-      type: rel.type,
-      description: rel.description,
-      relatedEntity: rel.entityA,
-      source: rel.source,
-      direction: 'incoming' as const,
-      createdAt: rel.createdAt,
-    }));
+     const incomingRelationships = entity.sourceRelationB.map(
+  (rel: typeof entity.sourceRelationB[number]) => ({
+    id: rel.id,
+    type: rel.type,
+    description: rel.description,
+    relatedEntity: rel.entityA,
+    source: rel.source,
+    direction: 'incoming' as const,
+    createdAt: rel.createdAt,
+  }));
+
 
     const relationships = [...outgoingRelationships, ...incomingRelationships];
 
     // Format provenance sources and evidence
-    const sources = entity.entitySources.map((es) => ({
-      id: es.source.id,
-      title: es.source.title,
-      url: es.source.url,
-      domain: es.source.domain,
-      snippet: es.source.snippet,
-      evidence: es.evidence,
-      createdAt: es.createdAt,
-    }));
+    const sources = entity.entitySources.map(
+  (es: typeof entity.entitySources[number]) => ({
+    id: es.source.id,
+    title: es.source.title,
+    url: es.source.url,
+    domain: es.source.domain,
+    snippet: es.source.snippet,
+    evidence: es.evidence,
+    createdAt: es.createdAt,
+  })
+);
 
     return NextResponse.json({
       entity: {
