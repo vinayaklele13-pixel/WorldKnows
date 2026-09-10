@@ -21,7 +21,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     };
   }
 
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://worldknows.com';
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://world-knows.vercel.app';
   const title = `${topic.name} — Knowledge Graph & Research | WorldKnows`;
   const description = topic.description || `Explore verified entities, relationships, and provenanced research for ${topic.name} on WorldKnows.`;
 
@@ -77,7 +77,7 @@ export default async function TopicPage({ params }: Props) {
     },
   });
 
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://worldknows.com';
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL ||  'https://world-knows.vercel.app';
   const canonicalUrl = `${baseUrl}/topics/${slug}`;
 
   const jsonLd = topicData ? {
