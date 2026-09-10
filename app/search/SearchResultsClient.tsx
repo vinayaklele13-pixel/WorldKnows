@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { useSearchParams } from 'next/navigation';
+import { useSearchParams, useRouter } from 'next/navigation';
 import SearchHeader from '@/components/search/SearchHeader';
 import QuickAnswer from '@/components/search/QuickAnswer';
 import KeyFacts from '@/components/search/KeyFacts';
@@ -9,16 +9,45 @@ import SourceList from '@/components/search/SourceList';
 import RelatedTopics from '@/components/search/RelatedTopics';
 import DetailedSections from '@/components/search/DetailedSections';
 import SearchSkeleton from '@/components/search/SearchSkeleton';
+import KnowledgeGraph from '@/components/graph/KnowledgeGraph';
+import BookmarkButton from '@/components/search/BookmarkButton';
 import { defaultMockResult } from '@/lib/mock-search-data';
 import { SearchResultData } from '@/types/search';
-import { Sparkles, Globe, Clock, AlertCircle } from 'lucide-react';
+import { Sparkles, Globe, Clock, AlertCircle, Network, BookOpen, MessageSquare, FolderPlus } from 'lucide-react';
 
 export default function SearchResultsClient() {
+  const router = useRouter();
   const searchParams = useSearchParams();
   const rawQuery = searchParams.get('q') || 'Quantum Computing';
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [resultData, setResultData] = useState<SearchResultData>(defaultMockResult);
+
+  // Build graph nodes/edges dynamically from resultData
+  const graphNodes = [
+    { id: 'main-node', name: resultData.query, type: 'CONCEPT', description: resultData.quickAnswer },
+    ...(resultData.relatedTopics || []).map((topic, idx) => ({
+      id: `related-${idx}`,
+      name: topic,
+      type: 'CONCEPT',
+      description: `Related topic: ${topic}`
+    }))
+  ];
+
+  const graphEdges = (resultData.relatedTopics || []).map((_, idx) => ({
+    id: `edge-${idx}`,
+    source: 'main-node',
+    target: `related-${idx}`,
+    type: 'RELATED_TO'
+  }));
+
+  const handleNodeClick = (nodeId: string) => {
+    if (nodeId === 'main-node') return;
+    const nodeIdx = parseInt(nodeId.split('-')[1]);
+    if (resultData.relatedTopics && resultData.relatedTopics[nodeIdx]) {
+      router.push(`/search?q=${encodeURIComponent(resultData.relatedTopics[nodeIdx])}`);
+    }
+  };
 
   useEffect(() => {
     let isMounted = true;
@@ -70,14 +99,14 @@ export default function SearchResultsClient() {
         ) : (
           <div className="space-y-8">
             {/* Search Meta Bar */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-6 border-b border-[#27272A]/60">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-[#27272A]/60">
               <div className="space-y-1">
                 <div className="flex items-center gap-2">
                   <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 uppercase tracking-widest">
-                    {resultData.intent} INTENT
+                    {resultData.intent || 'VERIFIED'} INTENT
                   </span>
                   <span className="text-xs text-[#71717A] flex items-center gap-1 font-mono">
-                    <Clock className="w-3 h-3" /> Indexed via OmniRoute API
+                    <Clock className="w-3 h-3" /> Indexed via Verified Pipeline
                   </span>
                 </div>
                 <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-[#FAFAFA]">
@@ -85,11 +114,27 @@ export default function SearchResultsClient() {
                 </h1>
               </div>
 
-              <div className="flex items-center gap-3">
-                <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#111113] border border-[#27272A] text-xs text-[#A1A1AA]">
-                  <Globe className="w-3.5 h-3.5 text-indigo-400" />
-                  <span>Verified Knowledge Index</span>
-                </div>
+              {/* Action Toolbar */}
+              <div className="flex flex-wrap items-center gap-2.5">
+                <BookmarkButton
+                  title={resultData.query}
+                  url={typeof window !== 'undefined' ? window.location.href : `https://worldknows.com/search?q=${encodeURIComponent(resultData.query)}`}
+                  notes={resultData.quickAnswer.slice(0, 200)}
+                />
+                <button
+                  onClick={() => router.push(`/research`)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#111113] border border-[#27272A] hover:border-indigo-500/50 text-xs font-medium text-[#A1A1AA] hover:text-[#FAFAFA] transition-all"
+                >
+                  <BookOpen className="w-3.5 h-3.5 text-indigo-400" />
+                  <span>Research Mode</span>
+                </button>
+                <button
+                  onClick={() => router.push(`/chat`)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#111113] border border-[#27272A] hover:border-indigo-500/50 text-xs font-medium text-[#A1A1AA] hover:text-[#FAFAFA] transition-all"
+                >
+                  <MessageSquare className="w-3.5 h-3.5 text-indigo-400" />
+                  <span>Start AI Chat</span>
+                </button>
               </div>
             </div>
 
@@ -99,6 +144,21 @@ export default function SearchResultsClient() {
               <div className="lg:col-span-8 space-y-6">
                 <QuickAnswer answer={resultData.quickAnswer} />
                 <DetailedSections sections={resultData.detailedSections} />
+
+                {/* Interactive Knowledge Graph Card */}
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-base font-bold text-[#FAFAFA] flex items-center gap-2">
+                      <Network className="w-4 h-4 text-indigo-400" />
+                      Knowledge Graph & Relations
+                    </h3>
+                    <span className="text-[10px] font-mono text-[#71717A]">
+                      {graphNodes.length} Nodes • {graphEdges.length} Connections
+                    </span>
+                  </div>
+                  <KnowledgeGraph nodes={graphNodes} edges={graphEdges} onNodeClick={handleNodeClick} />
+                </div>
+
                 <SourceList sources={resultData.sources} />
               </div>
 
@@ -106,6 +166,25 @@ export default function SearchResultsClient() {
               <div className="lg:col-span-4 space-y-6">
                 <KeyFacts facts={resultData.keyFacts} />
                 <RelatedTopics topics={resultData.relatedTopics} />
+
+                {/* Quick Discovery / Entity Navigator */}
+                <div className="p-5 rounded-2xl bg-[#111113] border border-[#27272A] space-y-3">
+                  <div className="flex items-center gap-2 text-xs font-semibold text-[#FAFAFA]">
+                    <Network className="w-4 h-4 text-indigo-400" />
+                    <span>Entity & Topic Directory</span>
+                  </div>
+                  <p className="text-xs text-[#A1A1AA] leading-relaxed">
+                    Explore connected topic hierarchies, entity cross-references, and graph relations across the WorldKnows network.
+                  </p>
+                  <div className="pt-2 flex items-center gap-2">
+                    <button
+                      onClick={() => router.push('/topics')}
+                      className="w-full py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-medium transition-all shadow-md shadow-indigo-600/20"
+                    >
+                      Browse Topics Directory
+                    </button>
+                  </div>
+                </div>
 
                 {/* Trust Notice Box */}
                 <div className="p-4 rounded-2xl bg-[#111113] border border-[#27272A] space-y-2">
@@ -133,7 +212,8 @@ export default function SearchResultsClient() {
           </div>
           <div className="flex items-center gap-6">
             <a href="/" className="hover:text-[#A1A1AA] transition-colors">Home</a>
-            <a href="/" className="hover:text-[#A1A1AA] transition-colors">Privacy</a>
+            <a href="/topics" className="hover:text-[#A1A1AA] transition-colors">Topics</a>
+            <a href="/research" className="hover:text-[#A1A1AA] transition-colors">Research</a>
             <span className="text-indigo-400">Search Engine Active</span>
           </div>
         </div>

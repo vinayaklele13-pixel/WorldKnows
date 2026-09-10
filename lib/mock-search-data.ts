@@ -1,6 +1,58 @@
 import { SearchResultData } from '@/types/search';
 
 export const mockSearchResults: Record<string, SearchResultData> = {
+  'where is india': {
+    query: 'Where is India?',
+    normalizedQuery: 'where is india',
+    intent: 'DEFINITION',
+    quickAnswer: 'India is located in South Asia, occupying the major portion of the Indian subcontinent. It is bounded by the Indian Ocean on the south, the Arabian Sea on the southwest, and the Bay of Bengal on the southeast. It shares land borders with Pakistan to the northwest; China, Nepal, and Bhutan to the north; and Bangladesh and Myanmar to the east [1].',
+    keyFacts: [
+      { label: 'Geographic Region', value: 'South Asia' },
+      { label: 'Coordinates', value: '20.5937° N, 78.9629° E' },
+      { label: 'Capital', value: 'New Delhi' },
+      { label: 'Neighboring Nations', value: 'China, Pakistan, Nepal, Bhutan, Bangladesh, Myanmar' },
+      { label: 'Coastline', value: '7,516.6 km along the Indian Ocean basin' }
+    ],
+    detailedSections: [
+      {
+        title: 'Geographic Boundaries & Location',
+        content: 'India constitutes the core of the Indian subcontinent in South Asia. Spanning over 3.287 million square kilometers, it is the seventh-largest country by land area and the most populous nation globally.'
+      },
+      {
+        title: 'Strategic Regional Position',
+        content: 'Positioned at the crossroads of major maritime trade routes in the Indian Ocean, India holds critical geostrategic importance connecting West Asia, Southeast Asia, and Central Asia.'
+      }
+    ],
+    sources: [
+      {
+        id: 'src-india-1',
+        title: 'The World Factbook: India',
+        domain: 'cia.gov',
+        url: 'https://www.cia.gov/the-world-factbook/countries/india/',
+        publisher: 'Central Intelligence Agency',
+        sourceType: 'GOVERNMENT',
+        reliabilityScore: 0.99,
+        excerpt: 'Authoritative geographic, geopolitical, and demographic profile of the Republic of India.'
+      },
+      {
+        id: 'src-india-2',
+        title: 'Encyclopædia Britannica: India Geography',
+        domain: 'britannica.com',
+        url: 'https://www.britannica.com/place/India',
+        publisher: 'Encyclopædia Britannica',
+        sourceType: 'REFERENCE',
+        reliabilityScore: 0.97,
+        excerpt: 'Detailed scholarly overview of India’s physical geography, climate, and boundaries.'
+      }
+    ],
+    relatedTopics: [
+      'Indian Subcontinent',
+      'Geography of South Asia',
+      'Indian Ocean Maritime Routes',
+      'Borders of India'
+    ],
+    isMock: true
+  },
   'what is quantum computing': {
     query: 'What is quantum computing?',
     normalizedQuery: 'what is quantum computing',
@@ -156,7 +208,7 @@ export const defaultMockResult: SearchResultData = {
       url: 'https://worldknows.internal/docs',
       publisher: 'WorldKnows Engineering',
       sourceType: 'REFERENCE',
-      reliabilityScore: 1.0,
+      reliabilityScore: 0.95,
       excerpt: 'Internal system architecture guidelines for high-trust information discovery.'
     }
   ],

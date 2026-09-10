@@ -14,23 +14,23 @@ model User {
   name             String?
   createdAt        DateTime          @default(now())
   updatedAt        DateTime          @updatedAt
-  searches         Search[]
+  conversations    AIConversation[]
   bookmarks        Bookmark[]
   collections      Collection[]
   researchProjects ResearchProject[]
-  conversations    AIConversation[]
+  searches         Search[]
 }
 
 model Search {
   id              String           @id @default(uuid())
   userId          String?
-  user            User?            @relation(fields: [userId], references: [id])
   query           String
   intent          String?
   summary         String?
   createdAt       DateTime         @default(now())
-  sources         Source[]
   collectionItems CollectionItem[]
+  user            User?            @relation(fields: [userId], references: [id])
+  sources         Source[]
 
   @@index([userId])
 }
@@ -38,7 +38,6 @@ model Search {
 model Source {
   id                  String               @id @default(uuid())
   searchId            String
-  search              Search               @relation(fields: [searchId], references: [id], onDelete: Cascade)
   title               String
   url                 String
   domain              String
@@ -46,29 +45,30 @@ model Source {
   reliabilityScore    Float?
   entityRelationships EntityRelationship[]
   entitySources       EntitySource[]
+  search              Search               @relation(fields: [searchId], references: [id], onDelete: Cascade)
 }
 
 model Bookmark {
   id              String           @id @default(uuid())
   userId          String
-  user            User             @relation(fields: [userId], references: [id])
   title           String
   url             String
   notes           String?
   createdAt       DateTime         @default(now())
+  user            User             @relation(fields: [userId], references: [id])
   collectionItems CollectionItem[]
 
   @@index([userId])
 }
 
 model Collection {
-  id              String           @id @default(uuid())
-  userId          String
-  user            User             @relation(fields: [userId], references: [id])
-  name            String
-  description     String?
-  createdAt       DateTime         @default(now())
-  items           CollectionItem[]
+  id          String           @id @default(uuid())
+  userId      String
+  name        String
+  description String?
+  createdAt   DateTime         @default(now())
+  user        User             @relation(fields: [userId], references: [id])
+  items       CollectionItem[]
 
   @@index([userId])
 }
@@ -76,27 +76,24 @@ model Collection {
 model CollectionItem {
   id           String     @id @default(uuid())
   collectionId String
-  collection   Collection @relation(fields: [collectionId], references: [id], onDelete: Cascade)
   searchId     String?
-  search       Search?    @relation(fields: [searchId], references: [id], onDelete: SetNull)
   bookmarkId   String?
-  bookmark     Bookmark?  @relation(fields: [bookmarkId], references: [id], onDelete: SetNull)
   createdAt    DateTime   @default(now())
-
-  // Enforce exactly one of searchId or bookmarkId (XOR)
-  // Enforced by Postgres CHECK constraint in migration
+  bookmark     Bookmark?  @relation(fields: [bookmarkId], references: [id])
+  collection   Collection @relation(fields: [collectionId], references: [id], onDelete: Cascade)
+  search       Search?    @relation(fields: [searchId], references: [id])
 }
 
 model ResearchProject {
   id          String         @id @default(uuid())
   userId      String
-  user        User           @relation(fields: [userId], references: [id])
   title       String
   description String?
   createdAt   DateTime       @default(now())
   notes       ResearchNote[]
-  topics      Topic[]        @relation("ResearchProjectTopics")
+  user        User           @relation(fields: [userId], references: [id])
   entities    Entity[]       @relation("ResearchProjectEntities")
+  topics      Topic[]        @relation("ResearchProjectTopics")
 
   @@index([userId])
 }
@@ -104,18 +101,18 @@ model ResearchProject {
 model ResearchNote {
   id        String          @id @default(uuid())
   projectId String
-  project   ResearchProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
   title     String
   content   String
   createdAt DateTime        @default(now())
+  project   ResearchProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
 }
 
 model AIConversation {
   id        String      @id @default(uuid())
   userId    String
-  user      User        @relation(fields: [userId], references: [id])
   title     String
   createdAt DateTime    @default(now())
+  user      User        @relation(fields: [userId], references: [id])
   messages  AIMessage[]
 
   @@index([userId])
@@ -124,24 +121,10 @@ model AIConversation {
 model AIMessage {
   id             String         @id @default(uuid())
   conversationId String
-  conversation   AIConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
-  role           String // 'system', 'user', 'assistant'
+  role           String
   content        String
   createdAt      DateTime       @default(now())
-}
-
-// ==========================================
-// Phase 7: Knowledge Graph & Topics Models
-// ==========================================
-
-enum EntityType {
-  PERSON
-  ORGANIZATION
-  PLACE
-  EVENT
-  CONCEPT
-  TECHNOLOGY
-  OTHER
+  conversation   AIConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
 }
 
 model Topic {
@@ -158,17 +141,17 @@ model Topic {
 }
 
 model Entity {
-  id                 String               @id @default(uuid())
-  name               String
-  type               EntityType
-  description        String?
-  createdAt          DateTime             @default(now())
-  updatedAt          DateTime             @updatedAt
-  topicEntities      TopicEntity[]
-  sourceRelationA    EntityRelationship[] @relation("EntityARelation")
-  sourceRelationB    EntityRelationship[] @relation("EntityBRelation")
-  entitySources      EntitySource[]
-  researchProjects   ResearchProject[]    @relation("ResearchProjectEntities")
+  id               String               @id @default(uuid())
+  name             String
+  type             EntityType
+  description      String?
+  createdAt        DateTime             @default(now())
+  updatedAt        DateTime             @updatedAt
+  sourceRelationA  EntityRelationship[] @relation("EntityARelation")
+  sourceRelationB  EntityRelationship[] @relation("EntityBRelation")
+  entitySources    EntitySource[]
+  topicEntities    TopicEntity[]
+  researchProjects ResearchProject[]    @relation("ResearchProjectEntities")
 
   @@unique([name, type])
 }
@@ -176,10 +159,10 @@ model Entity {
 model TopicEntity {
   id        String   @id @default(uuid())
   topicId   String
-  topic     Topic    @relation(fields: [topicId], references: [id], onDelete: Cascade)
   entityId  String
-  entity    Entity   @relation(fields: [entityId], references: [id], onDelete: Cascade)
   createdAt DateTime @default(now())
+  entity    Entity   @relation(fields: [entityId], references: [id], onDelete: Cascade)
+  topic     Topic    @relation(fields: [topicId], references: [id], onDelete: Cascade)
 
   @@unique([topicId, entityId])
 }
@@ -187,12 +170,12 @@ model TopicEntity {
 model TopicRelationship {
   id          String   @id @default(uuid())
   topicAId    String
-  topicA      Topic    @relation("TopicARelation", fields: [topicAId], references: [id], onDelete: Cascade)
   topicBId    String
-  topicB      Topic    @relation("TopicBRelation", fields: [topicBId], references: [id], onDelete: Cascade)
   type        String
   description String?
   createdAt   DateTime @default(now())
+  topicA      Topic    @relation("TopicARelation", fields: [topicAId], references: [id], onDelete: Cascade)
+  topicB      Topic    @relation("TopicBRelation", fields: [topicBId], references: [id], onDelete: Cascade)
 
   @@unique([topicAId, topicBId, type])
 }
@@ -200,28 +183,38 @@ model TopicRelationship {
 model EntityRelationship {
   id          String   @id @default(uuid())
   entityAId   String
-  entityA     Entity   @relation("EntityARelation", fields: [entityAId], references: [id], onDelete: Cascade)
   entityBId   String
-  entityB     Entity   @relation("EntityBRelation", fields: [entityBId], references: [id], onDelete: Cascade)
   type        String
   description String?
   sourceId    String?
-  source      Source?  @relation(fields: [sourceId], references: [id], onDelete: SetNull)
   createdAt   DateTime @default(now())
+  entityA     Entity   @relation("EntityARelation", fields: [entityAId], references: [id], onDelete: Cascade)
+  entityB     Entity   @relation("EntityBRelation", fields: [entityBId], references: [id], onDelete: Cascade)
+  source      Source?  @relation(fields: [sourceId], references: [id])
 
   @@unique([entityAId, entityBId, type])
   @@index([sourceId])
 }
 
 model EntitySource {
-  id         String   @id @default(uuid())
-  entityId   String
-  entity     Entity   @relation(fields: [entityId], references: [id], onDelete: Cascade)
-  sourceId   String
-  source     Source   @relation(fields: [sourceId], references: [id], onDelete: Cascade)
-  evidence   String?
-  createdAt  DateTime @default(now())
+  id        String   @id @default(uuid())
+  entityId  String
+  sourceId  String
+  evidence  String?
+  createdAt DateTime @default(now())
+  entity    Entity   @relation(fields: [entityId], references: [id], onDelete: Cascade)
+  source    Source   @relation(fields: [sourceId], references: [id], onDelete: Cascade)
 
   @@unique([entityId, sourceId])
   @@index([sourceId])
+}
+
+enum EntityType {
+  PERSON
+  ORGANIZATION
+  PLACE
+  EVENT
+  CONCEPT
+  TECHNOLOGY
+  OTHER
 }

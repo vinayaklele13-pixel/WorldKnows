@@ -1,3 +1,4 @@
+import { buildKnowledgeGraph } from '@/lib/knowledge-graph';
 import { NextResponse } from 'next/server';
 import { getSearchProvider } from '@/lib/providers/search';
 import { getAIProvider } from '@/lib/providers/ai';
@@ -79,33 +80,50 @@ export async function GET(request: Request) {
       searchCache.set(normalizedQuery, responsePayload);
     }
 
-    // 6. Non-blocking search persistence for authenticated users (runs on both cache hits and misses)
-    try {
-      const session = await getSession();
-      if (session && session.userId) {
-        await prisma.search.create({
-          data: {
-            userId: session.userId,
-            query: trimmedQuery,
-            intent: responsePayload.intent || null,
-            summary: responsePayload.quickAnswer || null,
-            sources: {
-              create: (responsePayload.sources || []).map((source: any) => ({
-                title: source.title || 'Untitled',
-                url: source.url || '#',
-                domain: source.domain || new URL(source.url || 'http://localhost').hostname,
-                snippet: source.snippet || null,
-                reliabilityScore: source.reliabilityScore || null,
-              })),
-            },
-          },
-        });
-      }
-    } catch (dbError) {
-      // Non-blocking: log error but do not fail the search request
-      console.error('Failed to persist search for user:', dbError);
-    }
+     // 6. Persist search and build knowledge graph for authenticated users
+let persistedSearchId: string | null = null;
 
+try {
+  const session = await getSession();
+
+  if (session && session.userId) {
+    const persistedSearch = await prisma.search.create({
+      data: {
+        userId: session.userId,
+        query: trimmedQuery,
+        intent: responsePayload.intent || null,
+        summary: responsePayload.quickAnswer || null,
+        sources: {
+          create: (responsePayload.sources || []).map((source: any) => ({
+            title: source.title || 'Untitled',
+            url: source.url || '#',
+            domain:
+              source.domain ||
+              new URL(source.url || 'http://localhost').hostname,
+            snippet: source.snippet || null,
+            reliabilityScore: source.reliabilityScore || null,
+          })),
+        },
+      },
+      select: {
+        id: true,
+      },
+    });
+
+    persistedSearchId = persistedSearch.id;
+
+    // Build/update the knowledge graph from this search
+    try {
+      await buildKnowledgeGraph(persistedSearchId, responsePayload);
+    } catch (graphError) {
+      // Knowledge graph failure must never break the search response
+      console.error('Failed to build knowledge graph:', graphError);
+    }
+  }
+} catch (dbError) {
+  // Database failure must never break the search response
+  console.error('Failed to persist search for user:', dbError);
+}
     // 7. Return normalized result with rate limit headers
     return NextResponse.json(responsePayload, {
       headers: {

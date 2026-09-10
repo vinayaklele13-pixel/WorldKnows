@@ -8,7 +8,13 @@ export class OmniRouteProvider implements AIProvider {
     const baseUrl = process.env.OMNIROUTE_BASE_URL || 'http://localhost:20128/v1';
     const model = process.env.AI_MODEL || 'auto';
 
-    const systemPrompt = 'You are WorldKnows OmniRoute AI, an advanced research synthesizer. Provide an authoritative, concise, and well-structured answer based on the provided search context, incorporating citation brackets like [1].';
+    const systemPrompt = `You are WorldKnows OmniRoute AI, an advanced research synthesizer and knowledge discovery assistant.
+RULES:
+1. Directly answer the user's query with authoritative accuracy.
+2. Distinguish verified facts from uncertainty or speculation.
+3. Strictly use the provided search context as evidence and incorporate bracketed citations like [1] corresponding to sources.
+4. Avoid hallucinating unsupported claims or inventing citations.
+5. Organize complex answers clearly with logical structure.`;
     const userPrompt = `Query: ${options.query}\n\nSearch Context Sources:\n${options.context}`;
 
     try {
