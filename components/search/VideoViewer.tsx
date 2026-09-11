@@ -5,6 +5,7 @@ import { X, ExternalLink, Bookmark, FolderPlus, Video, User, Clock } from 'lucid
 
 interface VideoItem {
   id: string;
+  videoId?: string;
   title: string;
   thumbnailUrl: string;
   videoUrl: string;
@@ -26,10 +27,13 @@ interface VideoViewerProps {
 export default function VideoViewer({ video, onClose }: VideoViewerProps) {
   if (!video) return null;
 
-  // Extract YouTube video ID for embed if possible
-  const getEmbedUrl = (url: string) => {
+  // Extract YouTube video ID for embed if possible, prioritizing explicit videoId from provider
+  const getEmbedUrl = (video: VideoItem) => {
+    if (video.videoId) {
+      return `https://www.youtube.com/embed/${video.videoId}?autoplay=1`;
+    }
     try {
-      const parsed = new URL(url);
+      const parsed = new URL(video.videoUrl);
       let vId = parsed.searchParams.get('v');
       if (!vId && parsed.hostname.includes('youtu.be')) {
         vId = parsed.pathname.slice(1);
@@ -43,7 +47,7 @@ export default function VideoViewer({ video, onClose }: VideoViewerProps) {
     return null;
   };
 
-  const embedUrl = getEmbedUrl(video.videoUrl);
+  const embedUrl = getEmbedUrl(video);
 
   const handleBookmark = async () => {
     try {

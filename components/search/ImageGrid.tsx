@@ -154,7 +154,9 @@ export default function ImageGrid({ images, loading, onSelectImage }: ImageGridP
           <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-indigo-500/10 text-indigo-400 border border-indigo-500/25 uppercase tracking-widest">
             Web Images
           </span>
-          <span className="text-xs text-[#71717A] font-mono">Found on the web</span>
+          <span className="text-xs text-[#71717A] font-mono">
+            {images[0]?.isMock ? 'DEVELOPMENT MOCK' : 'FOUND ON THE WEB'}
+          </span>
         </div>
         <button
           onClick={() => setShowGenerator(!showGenerator)}

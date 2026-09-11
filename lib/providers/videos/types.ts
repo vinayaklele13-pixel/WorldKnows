@@ -1,5 +1,6 @@
 export interface VideoSearchResult {
   id: string;
+  videoId?: string;
   title: string;
   thumbnailUrl: string;
   videoUrl: string;
