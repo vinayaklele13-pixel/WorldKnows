@@ -21,7 +21,7 @@ export class TavilyImageProvider implements ImageSearchProvider {
           query: `${query} images`,
           search_depth: 'basic',
           include_images: true,
-          max_results: limit,
+          max_results: limit * 2, // Fetch extra candidates to account for server-side validation filtering
         }),
       });
 
@@ -30,7 +30,16 @@ export class TavilyImageProvider implements ImageSearchProvider {
       }
 
       const data = await response.json();
-      const extracted: ImageSearchResult[] = [];
+      const rawCandidates: Array<{
+        id: string;
+        title: string;
+        thumbnailUrl: string;
+        imageUrl: string;
+        sourceUrl?: string;
+        sourceDomain: string;
+        sourceName: string;
+        isMock: boolean;
+      }> = [];
 
       // 1. Strict verified source-linked mapping: data.results[] -> result.url -> result.images[]
       if (data.results && Array.isArray(data.results)) {
@@ -44,7 +53,7 @@ export class TavilyImageProvider implements ImageSearchProvider {
               if (imgUrl) {
                 const domain = this.extractDomain(pageUrl);
                 if (domain) {
-                  extracted.push({
+                  rawCandidates.push({
                     id: `img-res-${rIdx}-${iIdx}-${Date.now()}`,
                     title: res.title || `${query} image`,
                     thumbnailUrl: imgUrl,
@@ -62,12 +71,12 @@ export class TavilyImageProvider implements ImageSearchProvider {
       }
 
       // 2. Asset-only fallback: top-level data.images[] (never fabricate a webpage URL, sourceUrl = undefined)
-      if (extracted.length === 0 && data.images && Array.isArray(data.images)) {
+      if (rawCandidates.length === 0 && data.images && Array.isArray(data.images)) {
         data.images.forEach((img: any, index: number) => {
           const imgUrl = typeof img === 'string' ? img : (img.url || img.image_url);
           if (imgUrl) {
             const domain = this.extractDomain(imgUrl);
-            extracted.push({
+            rawCandidates.push({
               id: `img-tavily-${index}-${Date.now()}`,
               title: `${query} - Reference Image ${index + 1}`,
               thumbnailUrl: imgUrl,
@@ -81,14 +90,50 @@ export class TavilyImageProvider implements ImageSearchProvider {
         });
       }
 
-      if (extracted.length > 0) {
-        return extracted.slice(0, limit);
-      }
+      // 3. Validate candidates in parallel to filter out 403, 401, non-image content-type, or unreachable URLs
+      const validatedResults: ImageSearchResult[] = [];
+      const validationPromises = rawCandidates.map(async (candidate) => {
+        const isValid = await this.validateImageUrl(candidate.imageUrl);
+        if (isValid) {
+          validatedResults.push(candidate);
+        }
+      });
 
-      return [];
+      await Promise.all(validationPromises);
+
+      return validatedResults.slice(0, limit);
     } catch (err) {
       console.error('Tavily Image Search Error:', err);
       return [];
+    }
+  }
+
+  private async validateImageUrl(url: string): Promise<boolean> {
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 2500);
+
+      const response = await fetch(url, {
+        method: 'HEAD',
+        headers: {
+          'User-Agent': 'WorldKnows-ImageValidator/1.0',
+        },
+        signal: controller.signal,
+      });
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        return false;
+      }
+
+      const contentType = response.headers.get('content-type');
+      if (!contentType || !contentType.toLowerCase().startsWith('image/')) {
+        return false;
+      }
+
+      return true;
+    } catch {
+      return false;
     }
   }
 

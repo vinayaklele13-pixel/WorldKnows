@@ -183,6 +183,10 @@ export default function ImageGrid({ images, loading, onSelectImage }: ImageGridP
                 alt={img.title}
                 className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                 loading="lazy"
+                onError={(e) => {
+                  const card = e.currentTarget.closest('.group');
+                  if (card) (card as HTMLElement).style.display = 'none';
+                }}
               />
               <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-end justify-between p-2.5">
                 <span className="text-[10px] font-mono text-white bg-black/60 px-2 py-0.5 rounded backdrop-blur-sm truncate max-w-[120px]">

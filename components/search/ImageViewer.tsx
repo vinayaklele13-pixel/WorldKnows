@@ -100,6 +100,9 @@ export default function ImageViewer({ image, onClose }: ImageViewerProps) {
             src={image.imageUrl}
             alt={image.title}
             className="max-h-[60vh] max-w-full object-contain rounded-xl shadow-2xl"
+            onError={(e) => {
+              (e.currentTarget as HTMLElement).style.display = 'none';
+            }}
           />
         </div>
 
