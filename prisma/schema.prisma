@@ -192,7 +192,7 @@ model EntityRelationship {
   entityA     Entity                    @relation("EntityARelation", fields: [entityAId], references: [id], onDelete: Cascade)
   entityB     Entity                    @relation("EntityBRelation", fields: [entityBId], references: [id], onDelete: Cascade)
   source      Source?                   @relation(fields: [sourceId], references: [id])
-  sources     EntityRelationshipSource[]
+  relationshipSources     EntityRelationshipSource[]
 
   @@unique([entityAId, entityBId, type])
   @@index([sourceId])

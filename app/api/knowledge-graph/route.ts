@@ -131,7 +131,7 @@ export async function POST(req: Request) {
       },
       take: GRAPH_LIMITS.MAX_EDGES,
       include: {
-        sources: {
+        relationshipSources: {
           include: { source: true },
         },
       },
@@ -151,7 +151,7 @@ export async function POST(req: Request) {
       target: r.entityBId,
       type: r.type,
       description: r.description,
-      sourceIds: r.sources.map(s => s.sourceId),
+      sourceIds: r.relationshipSources.map(s => s.sourceId),
     }));
 
     const allSourcesMap = new Map<string, any>();
@@ -161,7 +161,7 @@ export async function POST(req: Request) {
       });
     });
     dbRelationships.forEach(r => {
-      r.sources.forEach(rs => {
+      r.relationshipSources.forEach(rs => {
         if (rs.source) allSourcesMap.set(rs.source.id, rs.source);
       });
     });
