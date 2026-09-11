@@ -51,7 +51,15 @@ export default function ResearchDashboard() {
 
     if (res.ok) {
       const { project } = await res.json();
-      setProjects([project, ...projects]);
+      const normalizedProject = {
+        ...project,
+        _count: {
+          topics: 0,
+          entities: 0,
+          notes: 0,
+        },
+      };
+      setProjects([normalizedProject, ...projects]);
       setNewTitle('');
     }
     setCreating(false);
