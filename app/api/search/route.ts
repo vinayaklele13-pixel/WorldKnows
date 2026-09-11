@@ -61,15 +61,21 @@ export async function GET(request: Request) {
       // 4. Fetch Search Results
       const searchResults = await searchProvider.search({ query: trimmedQuery });
 
+      // Format sources cleanly for AI context
+      const formattedSourcesContext = (searchResults.sources || [])
+        .map((s: any, idx: number) =>
+          `SOURCE ${idx + 1}\nTitle: ${s.title}\nDomain: ${s.domain}\nURL: ${s.url}\nSnippet: ${s.snippet || s.excerpt || ''}`
+        ).join('\n\n');
+
       // 5. Synthesize via AI Adapter and generate dynamic related topics in parallel
       const [synthesizedAnswer, dynamicRelatedTopics] = await Promise.all([
         aiProvider.synthesize({
           query: trimmedQuery,
-          context: JSON.stringify(searchResults.sources)
+          context: formattedSourcesContext
         }),
         aiProvider.generateRelatedTopics ? aiProvider.generateRelatedTopics({
           query: trimmedQuery,
-          context: JSON.stringify(searchResults.sources)
+          context: formattedSourcesContext
         }).catch(() => []) : Promise.resolve([])
       ]);
 

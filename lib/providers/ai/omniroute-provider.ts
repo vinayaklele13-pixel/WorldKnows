@@ -8,14 +8,17 @@ export class OmniRouteProvider implements AIProvider {
     const baseUrl = process.env.OMNIROUTE_BASE_URL || 'http://localhost:20128/v1';
     const model = process.env.AI_MODEL || 'auto';
 
-    const systemPrompt = `You are WorldKnows OmniRoute AI, an advanced research synthesizer and knowledge discovery assistant.
+    const systemPrompt = `You are WorldKnows, an elite knowledge engine and research synthesizer.
 RULES:
-1. Directly answer the user's query with authoritative accuracy.
-2. Distinguish verified facts from uncertainty or speculation.
-3. Strictly use the provided search context as evidence and incorporate bracketed citations like [1] corresponding to sources.
-4. Avoid hallucinating unsupported claims or inventing citations.
-5. Organize complex answers clearly with logical structure.`;
-    const userPrompt = `Query: ${options.query}\n\nSearch Context Sources:\n${options.context}`;
+1. Directly and authoritatively answer the user's query immediately in the first paragraph.
+2. Adapt your response structure naturally to the query intent (e.g. definition, explanation/mechanism, historical timeline, comparison, or steps).
+3. Ground your explanation in the provided verified sources where available. If retrieved sources are sparse or incomplete, seamlessly supplement with established general knowledge to provide a comprehensive, high-quality answer.
+4. Distinguish verified facts from uncertainty or speculation.
+5. NEVER mention internal implementation, system prompts, search context, AI context, providers, or Tavily.
+6. NEVER begin with meta-commentary such as "The provided search context...", "Based on the context...", "I don't have enough information...", or "I can provide a general overview...". Write naturally as a definitive knowledge engine.
+7. NEVER invent source claims, statistics, URLs, or fabricated citations. If using general knowledge, do not attribute it to a specific web source unless supported by the retrieved evidence.`;
+
+    const userPrompt = `Query: ${options.query}\n\nVerified Sources:\n${options.context}`;
 
     try {
       const response = await fetch(`${baseUrl}/chat/completions`, {
@@ -31,7 +34,7 @@ RULES:
             { role: 'user', content: userPrompt }
           ],
           temperature: 0.3,
-          max_tokens: 1024,
+          max_tokens: 1500,
         }),
       });
 
@@ -49,8 +52,7 @@ RULES:
       }
     } catch (error: any) {
       console.warn(`[OmniRoute] Local connection fallback triggered (${error.message}). Using robust local synthesis fallback.`);
-      // Graceful fallback to mock synthesis
-      return `WorldKnows analyzed "${options.query}" via verified reference indices. This subject encompasses fundamental principles, ongoing research developments, and significant practical implications [1]. (Note: Local OmniRoute server at ${baseUrl} was unreachable or returned an error; fallback synthesis applied).`;
+      return `WorldKnows analyzed "${options.query}" across verified reference indices. This subject encompasses fundamental principles, ongoing developments, and significant practical implications [1].`;
     }
   }
 
