@@ -114,15 +114,17 @@ export default function ImageViewer({ image, onClose }: ImageViewerProps) {
           </div>
 
           <div className="flex items-center gap-2">
-            <a
-              href={image.sourceUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="px-4 py-2 rounded-xl bg-[#18181B] border border-[#27272A] hover:border-indigo-500/40 text-xs font-medium text-[#FAFAFA] flex items-center gap-1.5 transition-all"
-            >
-              <span>Open Source Page</span>
-              <ExternalLink className="w-3.5 h-3.5" />
-            </a>
+            {image.sourceUrl && (
+              <a
+                href={image.sourceUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="px-4 py-2 rounded-xl bg-[#18181B] border border-[#27272A] hover:border-indigo-500/40 text-xs font-medium text-[#FAFAFA] flex items-center gap-1.5 transition-all"
+              >
+                <span>Open Source Page</span>
+                <ExternalLink className="w-3.5 h-3.5" />
+              </a>
+            )}
             <button
               onClick={handleBookmark}
               className="px-4 py-2 rounded-xl bg-[#18181B] border border-[#27272A] hover:border-indigo-500/40 text-xs font-medium text-[#FAFAFA] flex items-center gap-1.5 transition-all"

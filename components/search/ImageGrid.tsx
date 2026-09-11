@@ -215,16 +215,20 @@ export default function ImageGrid({ images, loading, onSelectImage }: ImageGridP
 
               {/* Action Toolbar */}
               <div className="pt-2 border-t border-[#27272A]/60 flex items-center justify-between">
-                <a
-                  href={img.sourceUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  onClick={(e) => e.stopPropagation()}
-                  className="text-[10px] font-mono text-indigo-400 hover:underline flex items-center gap-1"
-                >
-                  <span>Source</span>
-                  <ExternalLink className="w-3 h-3" />
-                </a>
+                {img.sourceUrl ? (
+                  <a
+                    href={img.sourceUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={(e) => e.stopPropagation()}
+                    className="text-[10px] font-mono text-indigo-400 hover:underline flex items-center gap-1"
+                  >
+                    <span>Source</span>
+                    <ExternalLink className="w-3 h-3" />
+                  </a>
+                ) : (
+                  <span className="text-[10px] font-mono text-[#71717A]">Web Asset</span>
+                )}
 
                 <div className="flex items-center gap-1">
                   <button

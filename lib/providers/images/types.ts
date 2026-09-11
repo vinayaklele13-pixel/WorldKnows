@@ -3,7 +3,7 @@ export interface ImageSearchResult {
   title: string;
   thumbnailUrl: string;
   imageUrl: string;
-  sourceUrl: string;
+  sourceUrl?: string;
   sourceDomain: string;
   sourceName: string;
   width?: number;
