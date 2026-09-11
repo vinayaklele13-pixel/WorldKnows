@@ -60,7 +60,7 @@ export default function ImageGenerator() {
     const title = window.prompt('Research Project Title:', 'AI Generated Image Research');
     if (!title) return;
     try {
-        const res = await fetch('/api/research', {
+        const res = await fetch('/api/research/projects', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ title, description: 'AI Image generation research' }),
@@ -68,7 +68,7 @@ export default function ImageGenerator() {
         if (res.ok) {
             const data = await res.json();
             const projId = data.project?.id;
-            await fetch(`/api/research/${projId}/notes`, {
+            await fetch(`/api/research/projects/${projId}/notes`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({

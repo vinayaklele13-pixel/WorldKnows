@@ -40,7 +40,7 @@ export default function DeepResearchStudio() {
   const handleSaveToProject = async () => {
     if (!report) return;
     try {
-      const res = await fetch('/api/research', {
+      const res = await fetch('/api/research/projects', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -52,7 +52,7 @@ export default function DeepResearchStudio() {
         const data = await res.json();
         const projId = data.project?.id;
         if (projId) {
-          await fetch(`/api/research/${projId}/notes`, {
+          await fetch(`/api/research/projects/${projId}/notes`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({

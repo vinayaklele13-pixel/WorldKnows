@@ -57,7 +57,7 @@ export default function ImageGrid({ images, loading, onSelectImage }: ImageGridP
     if (!title) return;
 
     try {
-      const res = await fetch('/api/research', {
+      const res = await fetch('/api/research/projects', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -69,7 +69,7 @@ export default function ImageGrid({ images, loading, onSelectImage }: ImageGridP
         const data = await res.json();
         const projectId = data.project?.id;
         if (projectId) {
-          await fetch(`/api/research/${projectId}/notes`, {
+          await fetch(`/api/research/projects/${projectId}/notes`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -91,7 +91,7 @@ export default function ImageGrid({ images, loading, onSelectImage }: ImageGridP
   const handleAddToNotes = async (e: React.MouseEvent, img: ImageItem) => {
     e.stopPropagation();
     try {
-      const res = await fetch('/api/research');
+      const res = await fetch('/api/research/projects');
       if (!res.ok) {
         alert('Please sign in and create a research project first.');
         return;
@@ -103,7 +103,7 @@ export default function ImageGrid({ images, loading, onSelectImage }: ImageGridP
         return;
       }
       const projId = projects[0].id;
-      const noteRes = await fetch(`/api/research/${projId}/notes`, {
+      const noteRes = await fetch(`/api/research/projects/${projId}/notes`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

@@ -25,7 +25,7 @@ export default function AddToNotesButton({ query, summary }: AddToNotesButtonPro
     setLoading(true);
     try {
       // First get or create default research project
-      const projRes = await fetch('/api/research');
+      const projRes = await fetch('/api/research/projects');
       let projectId = '';
       if (projRes.ok) {
         const data = await projRes.json();
@@ -33,7 +33,7 @@ export default function AddToNotesButton({ query, summary }: AddToNotesButtonPro
           projectId = data.projects[0].id;
         } else {
           // Create default project
-          const createProj = await fetch('/api/research', {
+          const createProj = await fetch('/api/research/projects', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ title: 'General Research', description: 'Default research workspace for saved searches and notes.' }),
@@ -51,7 +51,7 @@ export default function AddToNotesButton({ query, summary }: AddToNotesButtonPro
         return;
       }
 
-      const res = await fetch(`/api/research/${projectId}/notes`, {
+      const res = await fetch(`/api/research/projects/${projectId}/notes`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

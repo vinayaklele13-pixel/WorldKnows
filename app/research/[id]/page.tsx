@@ -34,13 +34,22 @@ export default function ResearchProjectPage() {
 
   useEffect(() => {
     if (!projectId) return;
-    fetch(`/api/research/${projectId}`)
+    fetch(`/api/research/projects/${projectId}`)
       .then((res) => {
-        if (res.status === 401) router.push('/auth/signin');
+        if (res.status === 401) {
+          router.push('/auth/signin');
+          return null;
+        }
+        if (!res.ok) {
+          throw new Error('Project not found');
+        }
         return res.json();
       })
       .then((data) => {
-        if (data.project) setProject(data.project);
+        if (data && data.project) setProject(data.project);
+      })
+      .catch((err) => {
+        console.error('Fetch project detail error:', err);
       })
       .finally(() => setLoading(false));
   }, [projectId, router]);
@@ -49,7 +58,7 @@ export default function ResearchProjectPage() {
     e.preventDefault();
     if (!noteTitle.trim() || !noteContent.trim()) return;
 
-    const res = await fetch(`/api/research/${projectId}/notes`, {
+    const res = await fetch(`/api/research/projects/${projectId}/notes`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ title: noteTitle, content: noteContent }),
@@ -67,7 +76,7 @@ export default function ResearchProjectPage() {
   };
 
   const handleDeleteNote = async (noteId: string) => {
-    const res = await fetch(`/api/research/${projectId}/notes?noteId=${noteId}`, {
+    const res = await fetch(`/api/research/projects/${projectId}/notes?noteId=${noteId}`, {
       method: 'DELETE',
     });
     if (res.ok) {

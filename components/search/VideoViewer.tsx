@@ -74,7 +74,7 @@ export default function VideoViewer({ video, onClose }: VideoViewerProps) {
     const title = prompt('Enter research project title for this video:', 'WorldKnows Video Research');
     if (!title) return;
     try {
-      const res = await fetch('/api/research', {
+      const res = await fetch('/api/research/projects', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -86,7 +86,7 @@ export default function VideoViewer({ video, onClose }: VideoViewerProps) {
         const data = await res.json();
         const projectId = data.project?.id;
         if (projectId) {
-          await fetch(`/api/research/${projectId}/notes`, {
+          await fetch(`/api/research/projects/${projectId}/notes`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({

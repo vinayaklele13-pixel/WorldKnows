@@ -24,7 +24,7 @@ export default function AddToResearchButton({ query }: AddToResearchButtonProps)
   const handleOpen = async () => {
     setModalOpen(true);
     try {
-      const res = await fetch('/api/research');
+      const res = await fetch('/api/research/projects');
       if (res.ok) {
         const data = await res.json();
         if (data.projects) {
@@ -52,7 +52,7 @@ export default function AddToResearchButton({ query }: AddToResearchButtonProps)
 
       if (isCreatingNew || !targetProjectId) {
         if (!newProjectTitle.trim()) return;
-        const createRes = await fetch('/api/research', {
+        const createRes = await fetch('/api/research/projects', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -70,7 +70,7 @@ export default function AddToResearchButton({ query }: AddToResearchButtonProps)
 
       // Add a note or reference associated with this search query to the project
       if (targetProjectId) {
-        await fetch(`/api/research/${targetProjectId}/notes`, {
+        await fetch(`/api/research/projects/${targetProjectId}/notes`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
