@@ -2,22 +2,26 @@ import { prisma } from '@/lib/prisma';
 import { EntityType } from '@prisma/client';
 import { getEntityRelationshipDefinition, canonicalizeEndpoints } from './registry';
 import { resolvePublicProvenanceSource } from './provenance';
+import { canonicalizeEntityName, getEntityDeduplicationKey } from './canonicalization';
+import { GRAPH_LIMITS } from './config';
 
 /**
  * ============================================================================
- * Phase 7.8 AI Knowledge Extraction Pipeline (`lib/graph/extraction.ts`)
+ * Knowledge Graph 2.0 AI Extraction & Grounding Pipeline (`lib/graph/extraction.ts`)
  * ============================================================================
  *
- * Extracts structured entities and relationships from completed search sources,
- * validates against schema enums and relationship registry, enforces strict public
- * provenance safeguards, and persists atomically via Prisma transactions.
+ * Extracts structured entities and relationships from search or deep research context,
+ * applies canonicalization/deduplication, enforces strict evidence grounding
+ * (no evidence = no relationship), preserves multiple supporting sources per relationship,
+ * and enforces graph limits.
  */
 
 export interface ExtractedEntityCandidate {
   name: string;
   type: EntityType;
   description?: string;
-  sourceIndex?: number; // Index into the provided sources array
+  sourceIndices?: number[]; // Supporting source indices
+  sourceIndex?: number;    // Backward compatibility single index
 }
 
 export interface ExtractedRelationshipCandidate {
@@ -27,6 +31,7 @@ export interface ExtractedRelationshipCandidate {
   entityBType: EntityType;
   type: string;
   description?: string;
+  sourceIndices?: number[];
   sourceIndex?: number;
 }
 
@@ -40,6 +45,8 @@ export interface ExtractionInput {
     domain: string;
     snippet?: string;
   }>;
+  allowedSourceIds?: Set<string>; // For authorization/IDOR check
+  maxNodes?: number;
 }
 
 export interface ExtractionResult {
@@ -50,9 +57,25 @@ export interface ExtractionResult {
 }
 
 /**
- * Prompts OmniRoute AI to extract structured knowledge candidates from search context.
+ * Validates that a source ID is authorized (either a global public provenance source or present in allowedSourceIds).
  */
-export async function extractKnowledgeFromSearch(input: ExtractionInput): Promise<ExtractionResult> {
+async function validateSourceAuthorization(sourceId: string, allowedSourceIds?: Set<string>): Promise<boolean> {
+  if (!sourceId) return false;
+  if (allowedSourceIds && allowedSourceIds.has(sourceId)) {
+    return true;
+  }
+  try {
+    await resolvePublicProvenanceSource(sourceId);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Prompts AI (via OmniRoute / AIProvider) to extract structured knowledge candidates.
+ */
+export async function extractKnowledgeFromContext(input: ExtractionInput): Promise<ExtractionResult> {
   const errors: string[] = [];
   if (!input.sources || input.sources.length === 0) {
     return { success: false, entitiesCreated: 0, relationshipsCreated: 0, errors: ['No sources provided for extraction.'] };
@@ -63,27 +86,28 @@ export async function extractKnowledgeFromSearch(input: ExtractionInput): Promis
   const model = process.env.AI_MODEL || 'auto';
 
   const validEntityTypes = Object.values(EntityType).join(', ');
-  const systemPrompt = `You are WorldKnows Knowledge Graph Extraction AI. Your task is to analyze the provided search sources and extract structured knowledge items.
-You MUST output ONLY valid JSON matching this exact TypeScript structure:
+  const systemPrompt = `You are WorldKnows Knowledge Graph 2.0 Extraction AI. Analyze the provided search sources and extract structured knowledge items.
+You MUST output ONLY valid JSON matching this exact structure:
 {
   "entities": [
-    { "name": "Entity Name", "type": "PERSON | ORGANIZATION | PLACE | EVENT | CONCEPT | TECHNOLOGY | OTHER", "description": "Short description", "sourceIndex": 0 }
+    { "name": "Entity Name", "type": "PERSON | ORGANIZATION | PLACE | EVENT | CONCEPT | TECHNOLOGY | OTHER", "description": "Short description", "sourceIndices": [0] }
   ],
   "relationships": [
-    { "entityAName": "Name 1", "entityAType": "ORGANIZATION", "entityBName": "Name 2", "entityBType": "TECHNOLOGY", "type": "ASSOCIATED_WITH", "description": "Evidence / description", "sourceIndex": 0 }
+    { "entityAName": "Name 1", "entityAType": "ORGANIZATION", "entityBName": "Name 2", "entityBType": "TECHNOLOGY", "type": "ASSOCIATED_WITH", "description": "Evidence description", "sourceIndices": [0, 1] }
   ]
 }
 RULES:
 1. entity types MUST be strictly one of: ${validEntityTypes}.
 2. relationship types MUST be valid relationship identifiers (e.g., ASSOCIATED_WITH, PART_OF, FOUNDER_OF, CEO_OF, EMPLOYED_BY, ACQUIRED, INVESTED_IN, PARTICIPATED_IN, LOCATED_IN, SUCCESSOR_OF, COLLABORATES_WITH, COMPETES_WITH).
-3. sourceIndex refers to the 0-based index of the source in the provided sources list supporting this fact.
-4. Do NOT include markdown blocks around JSON or conversational filler. Return ONLY raw JSON.`;
+3. sourceIndices refers to 0-based indices of sources supporting this fact. Every relationship MUST have at least one valid sourceIndex.
+4. Do NOT invent facts or sources. Return ONLY raw JSON without markdown code fences.`;
 
   const sourcesContext = input.sources
+    .slice(0, GRAPH_LIMITS.MAX_SOURCES_PER_EXTRACTION)
     .map((s, idx) => `[Source ${idx}] Title: ${s.title}\nURL: ${s.url}\nSnippet: ${s.snippet || 'N/A'}`)
     .join('\n\n');
 
-  const userPrompt = `Search Query: ${input.query}\nSummary: ${input.searchSummary || 'N/A'}\n\nSources:\n${sourcesContext}`;
+  const userPrompt = `Query: ${input.query}\nSummary: ${input.searchSummary || 'N/A'}\n\nSources:\n${sourcesContext}`;
 
   let jsonText = '';
   try {
@@ -100,7 +124,7 @@ RULES:
           { role: 'user', content: userPrompt }
         ],
         temperature: 0.1,
-        max_tokens: 2000,
+        max_tokens: 2500,
       }),
     });
 
@@ -110,12 +134,9 @@ RULES:
 
     const data = await response.json();
     jsonText = data.choices?.[0]?.message?.content || '';
-
-    // Clean up potential markdown code fences if model included them
     jsonText = jsonText.replace(/^```json\s*/i, '').replace(/^```\s*/, '').replace(/\s*```$/, '').trim();
   } catch (err: any) {
-    // Fallback extraction for robustness when AI model is unavailable or unreachable
-    console.warn(`[Extraction] AI model connection warning (${err.message}). Using deterministic fallback extraction.`);
+    console.warn(`[Extraction] AI connection warning (${err.message}). Using deterministic fallback extraction.`);
     return await executeFallbackExtraction(input, errors);
   }
 
@@ -127,28 +148,16 @@ RULES:
     return await executeFallbackExtraction(input, errors);
   }
 
-  return await processAndPersistExtractedData(parsed, input.sources, errors);
+  return await processAndPersistExtractedData(parsed, input.sources, errors, input.allowedSourceIds, input.maxNodes);
 }
 
 /**
  * Deterministic fallback extractor for resilience when AI service is offline.
  */
 async function executeFallbackExtraction(input: ExtractionInput, errors: string[]): Promise<ExtractionResult> {
-  // Validate primary source via resolvePublicProvenanceSource before fallback extraction
   const primarySource = input.sources[0];
   if (!primarySource) {
     return { success: false, entitiesCreated: 0, relationshipsCreated: 0, errors: [...errors, 'No sources available for fallback extraction.'] };
-  }
-
-  try {
-    await resolvePublicProvenanceSource(primarySource.id);
-  } catch (provErr: any) {
-    return {
-      success: false,
-      entitiesCreated: 0,
-      relationshipsCreated: 0,
-      errors: [...errors, `Fallback extraction aborted: Primary source failed public provenance validation (${provErr.message}).`]
-    };
   }
 
   const fallbackEntities: ExtractedEntityCandidate[] = [
@@ -156,23 +165,25 @@ async function executeFallbackExtraction(input: ExtractionInput, errors: string[
       name: input.query.trim(),
       type: EntityType.CONCEPT,
       description: input.searchSummary || `Synthesized knowledge concept for ${input.query}`,
-      sourceIndex: 0,
+      sourceIndices: [0],
     }
   ];
 
-  return await processAndPersistExtractedData({ entities: fallbackEntities, relationships: [] }, input.sources, errors);
+  return await processAndPersistExtractedData({ entities: fallbackEntities, relationships: [] }, input.sources, errors, input.allowedSourceIds, input.maxNodes);
 }
 
 /**
- * Validates candidates against schema constraints, security rules, registry types,
- * and persists atomically using Prisma transactions.
+ * Validates candidates, applies canonicalization, enforces multi-source evidence and graph limits,
+ * and persists atomically via Prisma transactions.
  */
 async function processAndPersistExtractedData(
   parsed: { entities?: ExtractedEntityCandidate[]; relationships?: ExtractedRelationshipCandidate[] },
   sources: ExtractionInput['sources'],
-  errors: string[]
+  errors: string[],
+  allowedSourceIds?: Set<string>,
+  maxNodes = GRAPH_LIMITS.MAX_NODES
 ): Promise<ExtractionResult> {
-  const entityMap = new Map<string, string>(); // Key: "name|type", Value: entityId
+  const entityMap = new Map<string, string>(); // Key: deduplicationKey, Value: entityId
   let entitiesCreated = 0;
   let relationshipsCreated = 0;
 
@@ -182,22 +193,24 @@ async function processAndPersistExtractedData(
       if (parsed.entities && Array.isArray(parsed.entities)) {
         for (const rawEnt of parsed.entities) {
           if (!rawEnt.name || !rawEnt.type) continue;
+          if (entitiesCreated >= maxNodes) break;
 
-          // Validate EntityType enum
           if (!Object.values(EntityType).includes(rawEnt.type)) {
             errors.push(`Rejected entity "${rawEnt.name}": invalid entity type "${rawEnt.type}".`);
             continue;
           }
 
-          const cleanName = rawEnt.name.trim();
-          const entityKey = `${cleanName}|${rawEnt.type}`;
-          if (entityMap.has(entityKey)) continue;
+          const rawName = rawEnt.name.trim();
+          const canonicalName = canonicalizeEntityName(rawName) || rawName.toLowerCase();
+          const dedupKey = getEntityDeduplicationKey(rawName, rawEnt.type);
 
-          // Upsert Entity respecting @@unique([name, type])
+          if (entityMap.has(dedupKey)) continue;
+
+          // Upsert Entity
           const entity = await tx.entity.upsert({
             where: {
               name_type: {
-                name: cleanName,
+                name: canonicalName,
                 type: rawEnt.type,
               },
             },
@@ -205,39 +218,34 @@ async function processAndPersistExtractedData(
               description: rawEnt.description?.trim() || undefined,
             },
             create: {
-              name: cleanName,
+              name: canonicalName,
               type: rawEnt.type,
               description: rawEnt.description?.trim() || null,
             },
           });
 
-          entityMap.set(entityKey, entity.id);
+          entityMap.set(dedupKey, entity.id);
           entitiesCreated++;
 
-          // Attach provenance if sourceIndex is valid
-          if (rawEnt.sourceIndex !== undefined && sources[rawEnt.sourceIndex]) {
-            const src = sources[rawEnt.sourceIndex];
-            try {
-              // Strict server-side verification using resolvePublicProvenanceSource logic
-              const verifiedSource = await resolvePublicProvenanceSource(src.id);
+          // Attach provenance sources
+          const indices = rawEnt.sourceIndices || (rawEnt.sourceIndex !== undefined ? [rawEnt.sourceIndex] : []);
+          for (const idx of indices) {
+            const src = sources[idx];
+            if (src && (await validateSourceAuthorization(src.id, allowedSourceIds))) {
               await tx.entitySource.upsert({
                 where: {
                   entityId_sourceId: {
                     entityId: entity.id,
-                    sourceId: verifiedSource.id,
+                    sourceId: src.id,
                   },
                 },
-                update: {
-                  evidence: rawEnt.description || null,
-                },
+                update: { evidence: rawEnt.description || null },
                 create: {
                   entityId: entity.id,
-                  sourceId: verifiedSource.id,
+                  sourceId: src.id,
                   evidence: rawEnt.description || null,
                 },
               });
-            } catch (provErr: any) {
-              errors.push(`Provenance security rejection for entity "${cleanName}": ${provErr.message}`);
             }
           }
         }
@@ -247,75 +255,70 @@ async function processAndPersistExtractedData(
       if (parsed.relationships && Array.isArray(parsed.relationships)) {
         for (const rawRel of parsed.relationships) {
           if (!rawRel.entityAName || !rawRel.entityBName || !rawRel.type) continue;
+          if (relationshipsCreated >= GRAPH_LIMITS.MAX_EDGES) break;
 
-          const aKey = `${rawRel.entityAName.trim()}|${rawRel.entityAType || EntityType.CONCEPT}`;
-          const bKey = `${rawRel.entityBName.trim()}|${rawRel.entityBType || EntityType.CONCEPT}`;
+          const typeA = rawRel.entityAType || EntityType.CONCEPT;
+          const typeB = rawRel.entityBType || EntityType.CONCEPT;
 
-          let aId = entityMap.get(aKey);
-          let bId = entityMap.get(bKey);
+          const keyA = getEntityDeduplicationKey(rawRel.entityAName, typeA);
+          const keyB = getEntityDeduplicationKey(rawRel.entityBName, typeB);
 
-          // If entities weren't in the explicit entities list, attempt to find or create them securely
+          let aId = entityMap.get(keyA);
+          let bId = entityMap.get(keyB);
+
+          // Find or create entity A if missing
           if (!aId) {
+            const canonA = canonicalizeEntityName(rawRel.entityAName) || rawRel.entityAName.trim().toLowerCase();
             const entA = await tx.entity.upsert({
-              where: { name_type: { name: rawRel.entityAName.trim(), type: rawRel.entityAType || EntityType.CONCEPT } },
+              where: { name_type: { name: canonA, type: typeA } },
               update: {},
-              create: { name: rawRel.entityAName.trim(), type: rawRel.entityAType || EntityType.CONCEPT },
+              create: { name: canonA, type: typeA },
             });
             aId = entA.id;
-            entityMap.set(aKey, aId);
+            entityMap.set(keyA, aId);
           }
 
+          // Find or create entity B if missing
           if (!bId) {
+            const canonB = canonicalizeEntityName(rawRel.entityBName) || rawRel.entityBName.trim().toLowerCase();
             const entB = await tx.entity.upsert({
-              where: { name_type: { name: rawRel.entityBName.trim(), type: rawRel.entityBType || EntityType.CONCEPT } },
+              where: { name_type: { name: canonB, type: typeB } },
               update: {},
-              create: { name: rawRel.entityBName.trim(), type: rawRel.entityBType || EntityType.CONCEPT },
+              create: { name: canonB, type: typeB },
             });
             bId = entB.id;
-            entityMap.set(bKey, bId);
+            entityMap.set(keyB, bId);
           }
 
-          // Check 1: Prevent self-relations
-          if (aId === bId) {
-            errors.push(`Rejected self-relationship between entity ID "${aId}" and itself.`);
-            continue;
-          }
+          if (aId === bId) continue; // No self-relations
 
-          // Check 2: Validate relationship type against registry
           const relDef = getEntityRelationshipDefinition(rawRel.type);
           if (!relDef) {
-            errors.push(`Rejected relationship type "${rawRel.type}": not registered in relationship registry.`);
+            errors.push(`Rejected relationship type "${rawRel.type}": not in registry.`);
             continue;
           }
 
-          // Check 3: Canonicalize endpoints for symmetric relationships
           const { aId: finalAId, bId: finalBId } = canonicalizeEndpoints(aId, bId, relDef.isDirected);
 
-          // Check 4: Validate provenance source for relationship
-          let validSourceId: string | null = null;
-          if (rawRel.sourceIndex !== undefined && sources[rawRel.sourceIndex]) {
-            try {
-              const verified = await resolvePublicProvenanceSource(sources[rawRel.sourceIndex].id);
-              validSourceId = verified.id;
-            } catch (provErr: any) {
-              errors.push(`Rejected relationship provenance: ${provErr.message}`);
+          // Validate and collect supporting source IDs
+          const indices = rawRel.sourceIndices || (rawRel.sourceIndex !== undefined ? [rawRel.sourceIndex] : []);
+          const validSourceIds: string[] = [];
+
+          for (const idx of indices) {
+            const src = sources[idx];
+            if (src && (await validateSourceAuthorization(src.id, allowedSourceIds))) {
+              validSourceIds.push(src.id);
             }
           }
 
-          // Requirement 11: If relationship has no valid supporting source, reject rather than persisting
-          if (!validSourceId && sources.length > 0) {
-            // Default to first verified source if valid, otherwise reject
-            try {
-              const defaultVerified = await resolvePublicProvenanceSource(sources[0].id);
-              validSourceId = defaultVerified.id;
-            } catch (e) {
-              errors.push(`Rejected relationship between "${rawRel.entityAName}" and "${rawRel.entityBName}": missing valid supporting public provenance source.`);
-              continue;
-            }
+          // REQUIREMENT 6 & 11: EVIDENCE-GROUNDED. No evidence = no relationship.
+          if (validSourceIds.length === 0) {
+            errors.push(`Rejected relationship between "${rawRel.entityAName}" and "${rawRel.entityBName}": missing valid supporting provenance source (evidence-grounding required).`);
+            continue;
           }
 
-          // Upsert EntityRelationship respecting unique constraint
-          await tx.entityRelationship.upsert({
+          // Upsert EntityRelationship (using first sourceId for legacy compatibility)
+          const relationship = await tx.entityRelationship.upsert({
             where: {
               entityAId_entityBId_type: {
                 entityAId: finalAId,
@@ -325,16 +328,33 @@ async function processAndPersistExtractedData(
             },
             update: {
               description: rawRel.description?.trim() || undefined,
-              sourceId: validSourceId,
+              sourceId: validSourceIds[0],
             },
             create: {
               entityAId: finalAId,
               entityBId: finalBId,
               type: relDef.type,
               description: rawRel.description?.trim() || null,
-              sourceId: validSourceId,
+              sourceId: validSourceIds[0],
             },
           });
+
+          // REQUIREMENT 1: Preserve MULTIPLE supporting sources in EntityRelationshipSource
+          for (const sId of validSourceIds) {
+            await tx.entityRelationshipSource.upsert({
+              where: {
+                relationshipId_sourceId: {
+                  relationshipId: relationship.id,
+                  sourceId: sId,
+                },
+              },
+              update: {},
+              create: {
+                relationshipId: relationship.id,
+                sourceId: sId,
+              },
+            });
+          }
 
           relationshipsCreated++;
         }
@@ -347,13 +367,13 @@ async function processAndPersistExtractedData(
       relationshipsCreated,
       errors,
     };
-  } catch (txError: any) {
-    console.error('[Extraction] Transaction failure:', txError);
+  } catch (txErr: any) {
+    console.error('[Extraction] Transaction error:', txErr);
     return {
       success: false,
       entitiesCreated: 0,
       relationshipsCreated: 0,
-      errors: [...errors, `Database transaction error: ${txError.message}`],
+      errors: [...errors, `Database transaction error: ${txErr.message}`],
     };
   }
 }

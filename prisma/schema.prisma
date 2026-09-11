@@ -36,7 +36,7 @@ model Search {
 }
 
 model Source {
-  id                  String               @id @default(uuid())
+  id                  String                    @id @default(uuid())
   searchId            String
   title               String
   url                 String
@@ -45,7 +45,8 @@ model Source {
   reliabilityScore    Float?
   entityRelationships EntityRelationship[]
   entitySources       EntitySource[]
-  search              Search               @relation(fields: [searchId], references: [id], onDelete: Cascade)
+  entityRelationshipSources EntityRelationshipSource[]
+  search              Search                    @relation(fields: [searchId], references: [id], onDelete: Cascade)
 }
 
 model Bookmark {
@@ -181,18 +182,31 @@ model TopicRelationship {
 }
 
 model EntityRelationship {
-  id          String   @id @default(uuid())
+  id          String                    @id @default(uuid())
   entityAId   String
   entityBId   String
   type        String
   description String?
   sourceId    String?
-  createdAt   DateTime @default(now())
-  entityA     Entity   @relation("EntityARelation", fields: [entityAId], references: [id], onDelete: Cascade)
-  entityB     Entity   @relation("EntityBRelation", fields: [entityBId], references: [id], onDelete: Cascade)
-  source      Source?  @relation(fields: [sourceId], references: [id])
+  createdAt   DateTime                  @default(now())
+  entityA     Entity                    @relation("EntityARelation", fields: [entityAId], references: [id], onDelete: Cascade)
+  entityB     Entity                    @relation("EntityBRelation", fields: [entityBId], references: [id], onDelete: Cascade)
+  source      Source?                   @relation(fields: [sourceId], references: [id])
+  sources     EntityRelationshipSource[]
 
   @@unique([entityAId, entityBId, type])
+  @@index([sourceId])
+}
+
+model EntityRelationshipSource {
+  id             String             @id @default(uuid())
+  relationshipId String
+  sourceId       String
+  createdAt      DateTime           @default(now())
+  relationship   EntityRelationship @relation(fields: [relationshipId], references: [id], onDelete: Cascade)
+  source         Source             @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+
+  @@unique([relationshipId, sourceId])
   @@index([sourceId])
 }
 

@@ -13,9 +13,39 @@ import KnowledgeGraph from '@/components/graph/KnowledgeGraph';
 import BookmarkButton from '@/components/search/BookmarkButton';
 import AddToNotesButton from '@/components/search/AddToNotesButton';
 import AddToResearchButton from '@/components/search/AddToResearchButton';
+import ImageGrid from '@/components/search/ImageGrid';
+import ImageViewer from '@/components/search/ImageViewer';
+import VideoGrid from '@/components/search/VideoGrid';
+import VideoViewer from '@/components/search/VideoViewer';
 import { defaultMockResult } from '@/lib/mock-search-data';
 import { SearchResultData } from '@/types/search';
 import { Sparkles, Clock, AlertCircle, Network, BookOpen, MessageSquare, FolderPlus } from 'lucide-react';
+
+interface ImageItem {
+  id: string;
+  title: string;
+  thumbnailUrl: string;
+  imageUrl: string;
+  sourceUrl: string;
+  sourceDomain: string;
+  sourceName: string;
+  isMock?: boolean;
+}
+
+interface VideoItem {
+  id: string;
+  title: string;
+  thumbnailUrl: string;
+  videoUrl: string;
+  sourceUrl: string;
+  sourceDomain: string;
+  sourceName: string;
+  channelName?: string;
+  description?: string;
+  publishedAt?: string;
+  duration?: string;
+  isMock?: boolean;
+}
 
 export default function SearchResultsClient() {
   const router = useRouter();
@@ -24,6 +54,17 @@ export default function SearchResultsClient() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [resultData, setResultData] = useState<SearchResultData>(defaultMockResult);
+
+  // Image search state
+  const [images, setImages] = useState<ImageItem[]>([]);
+  const [imagesLoading, setImagesLoading] = useState(true);
+  const [selectedImage, setSelectedImage] = useState<ImageItem | null>(null);
+
+  // Video search state
+  const [videos, setVideos] = useState<VideoItem[]>([]);
+  const [videosLoading, setVideosLoading] = useState(true);
+  const [videoError, setVideoError] = useState<string | null>(null);
+  const [selectedVideo, setSelectedVideo] = useState<VideoItem | null>(null);
 
   // Build graph nodes/edges dynamically from resultData
   const graphNodes = [
@@ -53,7 +94,6 @@ export default function SearchResultsClient() {
 
   const handleStartAIChat = async () => {
     try {
-      // Create a new AI conversation preloaded with search context
       const res = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -62,7 +102,6 @@ export default function SearchResultsClient() {
       if (res.ok) {
         const data = await res.json();
         const convId = data.conversation.id;
-        // Post initial context message
         await fetch(`/api/chat/${convId}`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -82,17 +121,49 @@ export default function SearchResultsClient() {
 
   useEffect(() => {
     let isMounted = true;
-    async function fetchSearchResults() {
+    async function fetchData() {
       setLoading(true);
+      setImagesLoading(true);
+      setVideosLoading(true);
+      setVideoError(null);
       setError(null);
+
+      // Fetch search results, images, and videos in parallel for maximum performance
       try {
-        const response = await fetch(`/api/search?q=${encodeURIComponent(rawQuery)}`);
-        if (!response.ok) {
+        const [searchRes, imageRes, videoRes] = await Promise.all([
+          fetch(`/api/search?q=${encodeURIComponent(rawQuery)}`),
+          fetch(`/api/images/search?q=${encodeURIComponent(rawQuery)}`).catch(() => null),
+          fetch(`/api/videos/search?q=${encodeURIComponent(rawQuery)}`).catch(() => null)
+        ]);
+
+        if (!searchRes.ok) {
           throw new Error('Failed to fetch search results from API');
         }
-        const data = await response.json();
+        const searchJson = await searchRes.json();
+
         if (isMounted) {
-          setResultData(data);
+          setResultData(searchJson);
+          setLoading(false);
+        }
+
+        if (imageRes && imageRes.ok) {
+          const imageJson = await imageRes.json();
+          if (isMounted && imageJson.images) {
+            setImages(imageJson.images);
+          }
+        }
+
+        if (videoRes) {
+          if (videoRes.ok) {
+            const videoJson = await videoRes.json();
+            if (isMounted && videoJson.videos) {
+              setVideos(videoJson.videos);
+            }
+          } else {
+            if (isMounted) {
+              setVideoError('Video search is temporarily unavailable.');
+            }
+          }
         }
       } catch (err: any) {
         if (isMounted) {
@@ -101,11 +172,13 @@ export default function SearchResultsClient() {
       } finally {
         if (isMounted) {
           setLoading(false);
+          setImagesLoading(false);
+          setVideosLoading(false);
         }
       }
     }
 
-    fetchSearchResults();
+    fetchData();
 
     return () => {
       isMounted = false;
@@ -117,7 +190,7 @@ export default function SearchResultsClient() {
       {/* Global Sidebar */}
       <WorldKnowsSidebar initialQuery={rawQuery} />
 
-      {/* Main Content Area (offset by sidebar on desktop) */}
+      {/* Main Content Area */}
       <div className="lg:pl-64 flex-1 flex flex-col min-h-screen">
         <main className="flex-1 max-w-[1600px] w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
           {loading ? (
@@ -171,12 +244,28 @@ export default function SearchResultsClient() {
 
               {/* Adaptive Grid Layout */}
               <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-                {/* Primary Content Column (Left / Center) */}
+                {/* Primary Content Column */}
                 <div className="lg:col-span-8 space-y-6">
                   <QuickAnswer answer={resultData.quickAnswer} />
+
+                  {/* Real Web Image Search Grid */}
+                  <ImageGrid
+                    images={images}
+                    loading={imagesLoading}
+                    onSelectImage={(img) => setSelectedImage(img)}
+                  />
+
+                  {/* Real YouTube & Web Video Search Grid */}
+                  <VideoGrid
+                    videos={videos}
+                    loading={videosLoading}
+                    error={videoError}
+                    onSelectVideo={(vid) => setSelectedVideo(vid)}
+                  />
+
                   <DetailedSections sections={resultData.detailedSections} />
 
-                  {/* Interactive Knowledge Graph Card */}
+                  {/* Knowledge Graph Card */}
                   <div className="space-y-3">
                     <div className="flex items-center justify-between">
                       <h3 className="text-base font-bold text-[#FAFAFA] flex items-center gap-2">
@@ -193,7 +282,7 @@ export default function SearchResultsClient() {
                   <SourceList sources={resultData.sources} />
                 </div>
 
-                {/* Sidebar Column (Right) */}
+                {/* Sidebar Column */}
                 <div className="lg:col-span-4 space-y-6">
                   <KeyFacts facts={resultData.keyFacts} />
                   <RelatedTopics topics={resultData.relatedTopics} />
@@ -224,7 +313,7 @@ export default function SearchResultsClient() {
                       <span>WorldKnows Trust Guarantee</span>
                     </div>
                     <p className="text-xs text-[#A1A1AA] leading-relaxed">
-                      All citations are anchored to verified public sources. We prioritize transparency over synthetic confidence.
+                      All citations, web images, and video results are anchored to verified public sources. We prioritize transparency over synthetic confidence.
                     </p>
                   </div>
                 </div>
@@ -232,6 +321,18 @@ export default function SearchResultsClient() {
             </div>
           )}
         </main>
+
+        {/* Lightbox Image Viewer */}
+        <ImageViewer
+          image={selectedImage}
+          onClose={() => setSelectedImage(null)}
+        />
+
+        {/* YouTube Video Viewer / Modal */}
+        <VideoViewer
+          video={selectedVideo}
+          onClose={() => setSelectedVideo(null)}
+        />
 
         {/* Footer */}
         <footer className="border-t border-[#27272A]/60 bg-[#09090B] py-8 px-4 sm:px-6 lg:px-8 mt-16">

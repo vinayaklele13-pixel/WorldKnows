@@ -2,8 +2,9 @@
 
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Plus, BookOpen, Clock, Folder, ArrowRight, Sparkles, AlertCircle } from 'lucide-react';
+import { Plus, BookOpen, Clock, Folder, ArrowRight, Sparkles, AlertCircle, BookMarked } from 'lucide-react';
 import SearchHeader from '@/components/search/SearchHeader';
+import DeepResearchStudio from '@/components/research/DeepResearchStudio';
 
 interface Project {
   id: string;
@@ -23,6 +24,7 @@ export default function ResearchDashboard() {
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
   const [newTitle, setNewTitle] = useState('');
+  const [showDeepResearch, setShowDeepResearch] = useState(false);
 
   useEffect(() => {
     fetch('/api/research/projects')
@@ -65,23 +67,34 @@ export default function ResearchDashboard() {
             <h1 className="text-3xl font-bold tracking-tight">Research Workspace</h1>
             <p className="text-[#A1A1AA] mt-1">Manage your knowledge projects and research notes.</p>
           </div>
-          <form onSubmit={handleCreateProject} className="flex gap-2">
-            <input
-              type="text"
-              value={newTitle}
-              onChange={(e) => setNewTitle(e.target.value)}
-              placeholder="New project title..."
-              className="bg-[#111113] border border-[#27272A] rounded-lg px-4 py-2 text-sm focus:border-indigo-500 transition-all w-64 focus:outline-none"
-            />
-            <button
-              disabled={creating || !newTitle.trim()}
-              className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-500 px-4 py-2 rounded-lg text-sm font-medium transition-all disabled:opacity-50"
-            >
-              {creating ? <Sparkles className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
-              Create
-            </button>
-          </form>
+          <div className="flex items-center gap-3">
+             <button
+                onClick={() => setShowDeepResearch(!showDeepResearch)}
+                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all border ${showDeepResearch ? 'bg-indigo-600/10 border-indigo-500/50 text-indigo-400' : 'bg-[#111113] border-[#27272A] hover:border-indigo-500'}`}
+             >
+                <BookMarked className="w-4 h-4" />
+                {showDeepResearch ? 'Close Deep Research' : 'New Deep Research'}
+             </button>
+             <form onSubmit={handleCreateProject} className="flex gap-2">
+                <input
+                    type="text"
+                    value={newTitle}
+                    onChange={(e) => setNewTitle(e.target.value)}
+                    placeholder="New project title..."
+                    className="bg-[#111113] border border-[#27272A] rounded-lg px-4 py-2 text-sm focus:border-indigo-500 transition-all w-48 focus:outline-none"
+                />
+                <button
+                    disabled={creating || !newTitle.trim()}
+                    className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-500 px-4 py-2 rounded-lg text-sm font-medium transition-all disabled:opacity-50"
+                >
+                    {creating ? <Sparkles className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
+                    Create Project
+                </button>
+            </form>
+          </div>
         </div>
+
+        {showDeepResearch && <DeepResearchStudio />}
 
         {loading ? (
           <div className="text-center py-20 text-[#A1A1AA]">Loading projects...</div>
