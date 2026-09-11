@@ -7,4 +7,5 @@ export interface SynthesisOptions {
 export interface AIProvider {
   name: string;
   synthesize(options: SynthesisOptions): Promise<string>;
+  generateRelatedTopics?(options: SynthesisOptions): Promise<string[]>;
 }

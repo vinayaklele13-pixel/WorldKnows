@@ -61,16 +61,26 @@ export async function GET(request: Request) {
       // 4. Fetch Search Results
       const searchResults = await searchProvider.search({ query: trimmedQuery });
 
-      // 5. Synthesize via AI Adapter
-      const synthesizedAnswer = await aiProvider.synthesize({
-        query: trimmedQuery,
-        context: JSON.stringify(searchResults.sources)
-      });
+      // 5. Synthesize via AI Adapter and generate dynamic related topics in parallel
+      const [synthesizedAnswer, dynamicRelatedTopics] = await Promise.all([
+        aiProvider.synthesize({
+          query: trimmedQuery,
+          context: JSON.stringify(searchResults.sources)
+        }),
+        aiProvider.generateRelatedTopics ? aiProvider.generateRelatedTopics({
+          query: trimmedQuery,
+          context: JSON.stringify(searchResults.sources)
+        }).catch(() => []) : Promise.resolve([])
+      ]);
 
       // Filter and sanitize: Remove any placeholder references or fake internal docs
       const sanitizedSources = (searchResults.sources || []).filter(
         (s: any) => !s.url.includes('worldknows.internal/docs')
       );
+
+      const finalRelatedTopics = (dynamicRelatedTopics && dynamicRelatedTopics.length > 0)
+        ? dynamicRelatedTopics
+        : [];
 
       responsePayload = {
         ...searchResults,
@@ -78,6 +88,7 @@ export async function GET(request: Request) {
         query: trimmedQuery,
         normalizedQuery,
         quickAnswer: synthesizedAnswer,
+        relatedTopics: finalRelatedTopics,
       };
 
       searchCache.set(normalizedQuery, responsePayload);
