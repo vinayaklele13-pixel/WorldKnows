@@ -7,6 +7,7 @@ export interface Source {
   sourceType: 'GOVERNMENT' | 'ACADEMIC' | 'JOURNALISM' | 'REFERENCE';
   reliabilityScore: number;
   excerpt: string;
+  publishedDate?: string;
 }
 
 export interface KeyFact {

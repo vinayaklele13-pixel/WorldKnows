@@ -6,6 +6,7 @@ import { getSession } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { searchCache } from '@/lib/cache';
 import { apiRateLimiter, getClientIp } from '@/lib/ratelimit';
+import { detectFreshnessIntent } from '@/lib/providers/search/tavily-provider';
 
 export async function GET(request: Request) {
   // 1. Rate Limiting Check
@@ -46,10 +47,15 @@ export async function GET(request: Request) {
   }
 
   const normalizedQuery = trimmedQuery.toLowerCase();
+  const freshness = detectFreshnessIntent(trimmedQuery);
 
   try {
-    // 3. Check Cache
-    const cachedData = searchCache.get(normalizedQuery);
+    // 3. Check Cache (Bypass cache entirely for strongly time-sensitive queries)
+    let cachedData = null;
+    if (!freshness.isTimeSensitive) {
+      cachedData = searchCache.get(normalizedQuery);
+    }
+
     let responsePayload: any;
 
     if (cachedData) {
@@ -61,11 +67,16 @@ export async function GET(request: Request) {
       // 4. Fetch Search Results
       const searchResults = await searchProvider.search({ query: trimmedQuery });
 
-      // Format sources cleanly for AI context
+      // Format sources cleanly for AI context (including published date if available)
       const formattedSourcesContext = (searchResults.sources || [])
-        .map((s: any, idx: number) =>
-          `SOURCE ${idx + 1}\nTitle: ${s.title}\nDomain: ${s.domain}\nURL: ${s.url}\nSnippet: ${s.snippet || s.excerpt || ''}`
-        ).join('\n\n');
+        .map((s: any, idx: number) => {
+          let line = `SOURCE ${idx + 1}\nTitle: ${s.title}\nDomain: ${s.domain}\nURL: ${s.url}`;
+          if (s.publishedDate) {
+            line += `\nPublished: ${s.publishedDate}`;
+          }
+          line += `\nSnippet: ${s.snippet || s.excerpt || ''}`;
+          return line;
+        }).join('\n\n');
 
       // 5. Synthesize via AI Adapter and generate dynamic related topics in parallel
       const [synthesizedAnswer, dynamicRelatedTopics] = await Promise.all([
@@ -97,7 +108,9 @@ export async function GET(request: Request) {
         relatedTopics: finalRelatedTopics,
       };
 
-      searchCache.set(normalizedQuery, responsePayload);
+      if (!freshness.isTimeSensitive) {
+        searchCache.set(normalizedQuery, responsePayload);
+      }
     }
 
     // 6. Persist search
@@ -139,8 +152,11 @@ export async function GET(request: Request) {
         'X-RateLimit-Reset': String(rateLimitResult.reset),
       },
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error('Search API Error:', error);
-    return NextResponse.json({ error: 'Failed to process search request' }, { status: 500 });
+    const errorMessage = process.env.NODE_ENV === 'production'
+      ? "We couldn't complete that search. Please try again."
+      : (error.message || 'Failed to process search request');
+    return NextResponse.json({ error: errorMessage }, { status: 500 });
   }
 }

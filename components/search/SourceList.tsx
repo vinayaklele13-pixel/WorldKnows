@@ -1,6 +1,6 @@
 import React from 'react';
 import { Source } from '@/types/search';
-import { ExternalLink, ShieldCheck, BookOpen } from 'lucide-react';
+import { ExternalLink, ShieldCheck, BookOpen, Calendar } from 'lucide-react';
 
 interface SourceListProps {
   sources: Source[];
@@ -53,8 +53,16 @@ export default function SourceList({ sources }: SourceListProps) {
                 {source.excerpt}
               </p>
             </div>
-            <div className="mt-3 pt-2.5 border-t border-[#27272A] flex items-center justify-between text-[10px] text-[#71717A]">
-              <span>Publisher: {source.publisher}</span>
+            <div className="mt-3 pt-2.5 border-t border-[#27272A] flex flex-wrap items-center justify-between gap-2 text-[10px] text-[#71717A]">
+              <div className="flex items-center gap-3">
+                <span>Publisher: {source.publisher}</span>
+                {source.publishedDate && (
+                  <span className="flex items-center gap-1 text-[#A1A1AA]">
+                    <Calendar className="w-3 h-3 text-indigo-400" />
+                    <span>{source.publishedDate}</span>
+                  </span>
+                )}
+              </div>
               <span className="flex items-center gap-1 text-green-400 font-medium">
                 <ShieldCheck className="w-3 h-3" />
                 <span>Score: {Math.round(source.reliabilityScore * 100)}%</span>
